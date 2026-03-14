@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phi Sơn Invoice</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Be Vietnam Pro', sans-serif; background: #f1f5f9; margin: 0; }
+
+  /* Page transitions */
+  .page { display: none; }
+  .page.active { display: block; animation: fadeUp .22s ease; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Nav buttons */
+  .nav-btn { color: #64748b; transition: all .15s; }
+  .nav-btn:hover { color: #1d4ed8; background: #eff6ff; }
+  .nav-btn.active { color: #1d4ed8; background: #dbeafe; }
+
+  /* Autocomplete */
+  .ac-wrap { position: relative; }
+  .ac-drop { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 200;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.12); max-height: 220px; overflow-y: auto; display: none; }
+  .ac-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f8fafc; }
+  .ac-item:hover { background: #eff6ff; }
+  .ac-item:last-child { border-bottom: none; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* Table overflow */
+  .tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Print invoice styles */
+  #print-area { font-family: 'Times New Roman', Times, serif; background: #fff; }
+  .inv-table { border-collapse: collapse; width: 100%; }
+  .inv-table th, .inv-table td { border: 1.5px solid #000; padding: 7px 8px; }
+
+  /* Print media */
+  @media print {
+    html, body { margin: 0; padding: 0; background: white; }
+    body > *:not(#print-portal) { display: none !important; }
+    #print-portal { display: block !important; position: fixed; top: 0; left: 0; width: 100%; z-index: 99999; background: white; }
+    #print-portal .no-print { display: none !important; }
+  }
+
+  /* Input focus ring */
+  .inp { width: 100%; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px;
+    font-size: 13.5px; font-family: inherit; outline: none; transition: border .15s; background: #fff; }
+  .inp:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
+  .inp-icon { padding-left: 36px; }
+
+  /* Buttons */
+  .btn-primary { background: #2563eb; color: #fff; border: none; border-radius: 9px; padding: 9px 16px;
+    font-size: 13.5px; font-weight: 600; font-family: inherit; cursor: pointer; display: inline-flex;
+    align-items: center; gap: 6px; transition: background .15s; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-outline { background: #fff; color: #374151; border: 1.5px solid #d1d5db; border-radius: 9px;
+    padding: 9px 16px; font-size: 13.5px; font-weight: 500; font-family: inherit; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px; transition: all .15s; }
+  .btn-outline:hover { background: #f8fafc; border-color: #9ca3af; }
+  .btn-dark { background: #1e293b; color: #fff; border: none; border-radius: 9px; padding: 9px 16px;
+    font-size: 13.5px; font-weight: 600; font-family: inherit; cursor: pointer; display: inline-flex;
+    align-items: center; gap: 6px; transition: background .15s; }
+  .btn-dark:hover { background: #0f172a; }
+  .btn-ghost { background: transparent; color: #64748b; border: none; padding: 7px; cursor: pointer;
+    border-radius: 7px; display: inline-flex; align-items: center; transition: all .15s; }
+  .btn-ghost:hover { background: #f1f5f9; color: #334155; }
+  .btn-danger { background: #ef4444; color: #fff; border: none; border-radius: 9px; padding: 9px 16px;
+    font-size: 13.5px; font-weight: 600; font-family: inherit; cursor: pointer; transition: background .15s; }
+  .btn-danger:hover { background: #dc2626; }
+
+  /* Card */
+  .card { background: #fff; border: 1.5px solid #e9eef6; border-radius: 14px; padding: 20px; }
+
+  /* Toast */
+  #toast { position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+    background: #1e293b; color: #f8fafc; padding: 12px 18px; border-radius: 12px;
+    font-size: 13.5px; display: flex; align-items: center; gap: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.25); max-width: 300px;
+    transform: translateY(80px); opacity: 0; transition: all .3s cubic-bezier(.34,1.56,.64,1); pointer-events: none; }
+  #toast.show { transform: translateY(0); opacity: 1; }
+
+  /* Chip badge */
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+
+  /* Summary card stat */
+  .stat-box { background: #fff; border: 1.5px solid #e9eef6; border-radius: 10px; padding: 14px 12px; text-align: center; }
+</style>
+</head>
+<body>
+
+<!-- ====== NAVBAR ====== -->
+<nav style="background:#fff;border-bottom:1.5px solid #e9eef6;position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+  <div style="max-width:1100px;margin:0 auto;padding:0 16px;height:56px;display:flex;align-items:center;justify-content:space-between;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:34px;height:34px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);border-radius:9px;display:flex;align-items:center;justify-content:center;">
+        <svg width="18" height="18" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      </div>
+      <span style="font-weight:800;font-size:17px;color:#1e293b;letter-spacing:-.3px;">Phi Sơn Invoice</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;">
+      <button class="nav-btn" id="nav-create" onclick="showPage('create')"
+        style="display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:9px;font-size:13.5px;font-weight:600;font-family:inherit;border:none;cursor:pointer;">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Tạo mới
+      </button>
+      <button class="nav-btn" id="nav-history" onclick="showPage('history')"
+        style="display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:9px;font-size:13.5px;font-weight:600;font-family:inherit;border:none;cursor:pointer;">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Lịch sử
+      </button>
+      <button class="nav-btn" id="nav-stats" onclick="showPage('stats')"
+        style="display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:9px;font-size:13.5px;font-weight:600;font-family:inherit;border:none;cursor:pointer;">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Thống kê
+      </button>
+    </div>
+  </div>
+</nav>
+
+<main style="max-width:1100px;margin:0 auto;padding:24px 16px;">
+
+<!-- ====== PAGE: CREATE ====== -->
+<div class="page active" id="page-create">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:22px;">
+    <div>
+      <h1 style="font-size:22px;font-weight:800;color:#0f172a;margin:0 0 4px;">Tạo hoá đơn mới</h1>
+      <p style="font-size:13px;color:#64748b;margin:0;">Nhập thông tin khách hàng và hàng hoá bên dưới</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <button class="btn-outline" onclick="resetForm()">Làm mới</button>
+      <button class="btn-primary" onclick="saveInvoice()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Lưu hoá đơn
+      </button>
+      <button class="btn-dark" onclick="openPrint()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Xem & In
+      </button>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;" class="create-grid">
+    <!-- Customer info -->
+    <div class="card" style="grid-column:1/2;">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:16px;">
+        <svg width="16" height="16" fill="none" stroke="#3b82f6" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span style="font-weight:700;font-size:13px;color:#2563eb;text-transform:uppercase;letter-spacing:.4px;">Thông tin khách hàng</span>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="display:block;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Tên khách hàng hoặc SĐT</label>
+        <div class="ac-wrap">
+          <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);pointer-events:none;">
+            <svg width="14" height="14" fill="none" stroke="#94a3b8" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </span>
+          <input class="inp inp-icon" type="text" id="inp-search" placeholder="Nhập tên hoặc số điện thoại..." autocomplete="off" oninput="handleSearch(this.value)">
+          <div class="ac-drop" id="ac-drop"></div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Số điện thoại</label>
+          <div style="position:relative;">
+            <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);pointer-events:none;">
+              <svg width="13" height="13" fill="none" stroke="#94a3b8" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.65 3.44A2 2 0 0 1 3.64 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.94a16 16 0 0 0 6.15 6.15l.98-.98a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            </span>
+            <input class="inp inp-icon" type="text" id="inp-phone" placeholder="09xx...">
+          </div>
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Ngày lập</label>
+          <input class="inp" type="date" id="inp-date">
+        </div>
+      </div>
+
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Địa chỉ</label>
+        <div style="position:relative;">
+          <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);pointer-events:none;">
+            <svg width="13" height="13" fill="none" stroke="#94a3b8" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </span>
+          <input class="inp inp-icon" type="text" id="inp-address" placeholder="Địa chỉ giao hàng...">
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="card" style="background:linear-gradient(145deg,#eff6ff,#f8fafc);border-color:#dbeafe;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;">
+      <div id="summary-empty" style="text-align:center;">
+        <div style="width:56px;height:56px;background:#dbeafe;border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+          <svg width="28" height="28" fill="none" stroke="#3b82f6" stroke-width="1.5" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        </div>
+        <p style="font-weight:700;font-size:15px;color:#334155;margin:0 0 4px;">Tổng quan hoá đơn</p>
+        <p style="font-size:12px;color:#94a3b8;margin:0;">Tự động tính toán khi bạn thêm hàng</p>
+      </div>
+      <div id="summary-data" style="width:100%;display:none;">
+        <p style="font-weight:700;font-size:14px;color:#334155;text-align:center;margin:0 0 14px;">Tổng quan hoá đơn</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="stat-box">
+            <p style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin:0 0 6px;">Số lượng</p>
+            <p style="font-size:26px;font-weight:800;color:#1e293b;margin:0;" id="sum-qty">0</p>
+          </div>
+          <div class="stat-box">
+            <p style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin:0 0 6px;">Thành tiền</p>
+            <p style="font-size:22px;font-weight:800;color:#2563eb;margin:0;" id="sum-price">0</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Items table -->
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <span style="font-weight:700;font-size:15px;color:#0f172a;">Danh sách hàng hoá</span>
+      <button class="btn-primary" onclick="addItem()" style="font-size:13px;padding:7px 14px;">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Thêm hàng
+      </button>
+    </div>
+    <div class="tbl-wrap">
+      <table style="width:100%;border-collapse:collapse;min-width:620px;">
+        <thead>
+          <tr style="border-bottom:2px solid #f1f5f9;">
+            <th style="text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding-bottom:10px;width:40px;">TT</th>
+            <th style="text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding-bottom:10px;">Loại áo</th>
+            <th style="text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding-bottom:10px;">Màu</th>
+            <th style="text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding-bottom:10px;">Size (VD: 1S 2M)</th>
+            <th style="text-align:right;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding-bottom:10px;width:70px;">SL</th>
+            <th style="text-align:right;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding-bottom:10px;width:110px;">Đơn giá</th>
+            <th style="text-align:right;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding-bottom:10px;width:110px;">Thành tiền</th>
+            <th style="width:36px;"></th>
+          </tr>
+        </thead>
+        <tbody id="items-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ====== PAGE: HISTORY ====== -->
+<div class="page" id="page-history">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:12px;">
+    <div>
+      <h1 style="font-size:22px;font-weight:800;color:#0f172a;margin:0 0 4px;">Lịch sử hoá đơn</h1>
+      <p style="font-size:13px;color:#64748b;margin:0;">Xem và quản lý các hoá đơn đã lưu</p>
+    </div>
+    <button class="btn-ghost" onclick="renderHistory()" title="Làm mới">
+      <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    </button>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div class="tbl-wrap">
+      <table style="width:100%;border-collapse:collapse;min-width:560px;">
+        <thead>
+          <tr style="border-bottom:2px solid #f1f5f9;background:#f8fafc;">
+            <th style="text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;">Ngày</th>
+            <th style="text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;">Khách hàng</th>
+            <th style="text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;">SĐT</th>
+            <th style="text-align:right;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;">Số lượng</th>
+            <th style="text-align:right;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;">Tổng tiền</th>
+            <th style="text-align:center;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;">Thao tác</th>
+          </tr>
+        </thead>
+        <tbody id="hist-body"></tbody>
+      </table>
+    </div>
+    <div id="hist-empty" style="padding:60px;text-align:center;color:#94a3b8;font-size:14px;display:none;">
+      Chưa có hoá đơn nào được lưu.
+    </div>
+  </div>
+</div>
+
+<!-- ====== PAGE: STATS ====== -->
+<div class="page" id="page-stats">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:22px;">
+    <div>
+      <h1 style="font-size:22px;font-weight:800;color:#0f172a;margin:0 0 4px;">Thống kê khách hàng</h1>
+      <p style="font-size:13px;color:#64748b;margin:0;">Theo dõi doanh thu và số lượng theo khách hàng</p>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;">
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Từ ngày</label>
+        <input class="inp" type="date" id="stat-from" style="width:150px;">
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Đến ngày</label>
+        <input class="inp" type="date" id="stat-to" style="width:150px;">
+      </div>
+      <button class="btn-primary" onclick="renderStats()">Lọc</button>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px;">
+    <div class="card">
+      <p style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px;">Tổng khách hàng</p>
+      <p style="font-size:32px;font-weight:800;color:#1e293b;margin:0;" id="stat-cust">0</p>
+    </div>
+    <div class="card">
+      <p style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px;">Tổng số lượng áo</p>
+      <p style="font-size:32px;font-weight:800;color:#16a34a;margin:0;" id="stat-qty">0</p>
+    </div>
+    <div class="card">
+      <p style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px;">Tổng doanh thu</p>
+      <p style="font-size:32px;font-weight:800;color:#2563eb;margin:0;" id="stat-rev">0</p>
+    </div>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div class="tbl-wrap">
+      <table style="width:100%;border-collapse:collapse;min-width:480px;">
+        <thead>
+          <tr style="border-bottom:2px solid #f1f5f9;background:#f8fafc;">
+            <th style="text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;">Khách hàng</th>
+            <th style="text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;">SĐT</th>
+            <th style="text-align:right;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;">Số lượng đã lấy</th>
+            <th style="text-align:right;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;">Tổng tiền đã lấy</th>
+          </tr>
+        </thead>
+        <tbody id="stat-body"></tbody>
+      </table>
+    </div>
+    <div id="stat-empty" style="padding:60px;text-align:center;color:#94a3b8;font-size:14px;display:none;">Không có dữ liệu thống kê.</div>
+  </div>
+</div>
+
+</main>
+
+<!-- ====== PRINT OVERLAY ====== -->
+<div id="print-overlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.85);z-index:500;flex-direction:column;">
+  <!-- Toolbar -->
+  <div class="no-print" style="background:#0f172a;padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;">
+    <button onclick="closePrint()" style="display:flex;align-items:center;gap:6px;color:#94a3b8;background:transparent;border:none;font-size:13.5px;font-family:inherit;cursor:pointer;padding:7px 10px;border-radius:8px;transition:all .15s;" onmouseover="this.style.color='#fff';this.style.background='rgba(255,255,255,.08)'" onmouseout="this.style.color='#94a3b8';this.style.background='transparent'">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+      Quay lại chỉnh sửa
+    </button>
+    <div style="flex:1;"></div>
+    <button onclick="saveJpg()" title="Lưu ảnh JPG" style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.08);color:#cbd5e1;border:1.5px solid rgba(255,255,255,.12);border-radius:8px;padding:7px 12px;font-size:13px;font-family:inherit;cursor:pointer;transition:all .15s;" onmouseover="this.style.background='rgba(255,255,255,.15)';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,.08)';this.style.color='#cbd5e1'">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      Lưu ảnh
+    </button>
+    <button onclick="exportExcel()" title="Xuất Excel" style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.08);color:#cbd5e1;border:1.5px solid rgba(255,255,255,.12);border-radius:8px;padding:7px 12px;font-size:13px;font-family:inherit;cursor:pointer;transition:all .15s;" onmouseover="this.style.background='rgba(255,255,255,.15)';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,.08)';this.style.color='#cbd5e1'">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Xuất Excel
+    </button>
+    <button onclick="doPrint()" style="display:flex;align-items:center;gap:7px;background:#2563eb;color:#fff;border:none;border-radius:9px;padding:9px 18px;font-size:13.5px;font-weight:700;font-family:inherit;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      In ngay
+    </button>
+  </div>
+
+  <!-- Preview area -->
+  <div style="flex:1;overflow:auto;display:flex;justify-content:center;padding:32px 16px;">
+    <div id="print-area" style="width:794px;min-height:1000px;background:#fff;padding:44px 52px;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+        <div>
+          <div style="color:#cc0000;font-size:21px;font-weight:900;text-transform:uppercase;letter-spacing:.4px;line-height:1.2;">Tổng Kho Phôi Áo Phi Sơn</div>
+          <div style="font-size:13px;font-weight:700;margin-top:3px;">CTY DỆT MAY PHI SƠN</div>
+          <div style="font-size:12.5px;margin-top:2px;">Địa chỉ: 169 đường K2, Phú Đô, Nam Từ Liêm, Hà Nội</div>
+          <div style="font-size:12.5px;margin-top:1px;">SĐT: 0877918706</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:22px;font-weight:900;text-transform:uppercase;letter-spacing:.5px;">Hóa Đơn Bán Hàng</div>
+          <div style="font-size:12.5px;margin-top:5px;"><strong>SỐ TÀI KHOẢN :</strong> 9699 6588 888</div>
+          <div style="font-size:12.5px;margin-top:1px;">Ngân Hàng Techcombank</div>
+          <div style="font-size:12.5px;margin-top:1px;">CTK: Phùng Thị Thuỳ Linh</div>
+        </div>
+      </div>
+
+      <hr style="border:none;border-top:2px solid #000;margin:10px 0 14px;">
+
+      <div style="margin-bottom:16px;font-size:13px;">
+        <div style="margin-bottom:5px;"><strong>Tên khách hàng:</strong> <span id="pr-name"></span></div>
+        <div style="margin-bottom:5px;"><strong>Địa chỉ:</strong> <span id="pr-address"></span></div>
+        <div><strong>Sđt:</strong> <span id="pr-phone"></span></div>
+      </div>
+
+      <table class="inv-table">
+        <thead>
+          <tr>
+            <th style="width:42px;text-align:center;font-size:13px;">TT</th>
+            <th style="text-align:center;font-size:13px;">TÊN HÀNG</th>
+            <th style="width:88px;text-align:center;font-size:13px;">SỐ<br>LƯỢNG</th>
+            <th style="width:110px;text-align:center;font-size:13px;">ĐƠN GIÁ</th>
+            <th style="width:130px;text-align:center;font-size:13px;">THÀNH TIỀN</th>
+          </tr>
+        </thead>
+        <tbody id="pr-items"></tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2" style="border:1.5px solid #000;padding:8px;text-align:center;font-weight:700;font-size:13px;">TỔNG CỘNG</td>
+            <td style="border:1.5px solid #000;padding:8px;text-align:center;font-weight:700;font-size:13px;" id="pr-total-qty"></td>
+            <td style="border:1.5px solid #000;padding:8px;"></td>
+            <td style="border:1.5px solid #000;padding:8px;text-align:right;font-weight:700;font-size:13px;" id="pr-total-price"></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div style="margin-top:14px;font-style:italic;font-size:13px;border-bottom:1px dashed #888;padding-bottom:8px;">
+        Thành tiền (viết bằng chữ): <span id="pr-words"></span>
+      </div>
+
+      <div style="margin-top:44px;display:flex;justify-content:space-between;font-size:13px;">
+        <div style="text-align:center;width:44%;">
+          <strong>KHÁCH HÀNG</strong>
+          <div style="font-style:italic;font-size:12px;margin-top:3px;">(Ký, họ tên)</div>
+          <div style="height:60px;"></div>
+        </div>
+        <div style="text-align:center;width:44%;">
+          <div style="font-style:italic;font-size:12.5px;margin-bottom:4px;" id="pr-date-str"></div>
+          <strong>NGƯỜI BÁN HÀNG</strong>
+          <div style="font-style:italic;font-size:12px;margin-top:3px;">(Ký, họ tên)</div>
+          <div style="height:60px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Print portal (for window.print) -->
+<div id="print-portal" style="display:none;"></div>
+
+<!-- ====== CONFIRM DIALOG ====== -->
+<div id="confirm-bg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;padding:28px;max-width:360px;width:90%;box-shadow:0 24px 60px rgba(0,0,0,.25);">
+    <h3 style="font-weight:800;font-size:17px;color:#0f172a;margin:0 0 8px;">Xác nhận xoá</h3>
+    <p style="color:#64748b;font-size:14px;margin:0 0 22px;">Bạn có chắc muốn xoá hoá đơn này không? Hành động này không thể hoàn tác.</p>
+    <div style="display:flex;justify-content:flex-end;gap:10px;">
+      <button class="btn-outline" onclick="closeConfirm()">Huỷ</button>
+      <button class="btn-danger" onclick="doDelete()">Xoá</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== TOAST ====== -->
+<div id="toast">
+  <svg id="toast-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+  <span id="toast-msg"></span>
+</div>
+
+<style>
+@media(max-width:768px) {
+  .create-grid { grid-template-columns: 1fr !important; }
+  .create-grid > *:first-child { grid-column: auto !important; }
+}
+</style>
+
+<script>
+// ==================== DB (localStorage) ====================
+const DB = {
+  getCx: () => JSON.parse(localStorage.getItem('ps_cx') || '[]'),
+  saveCx: d => localStorage.setItem('ps_cx', JSON.stringify(d)),
+  getInv: () => JSON.parse(localStorage.getItem('ps_inv') || '[]'),
+  saveInv: d => localStorage.setItem('ps_inv', JSON.stringify(d)),
+
+  upsertCx(name, phone, address) {
+    const list = this.getCx();
+    let cx = list.find(c => c.phone === phone);
+    if (cx) { cx.name = name; cx.address = address; }
+    else { cx = { id: uid(), name, phone, address }; list.push(cx); }
+    this.saveCx(list);
+    return cx;
+  },
+  saveOne(inv) {
+    const list = this.getInv();
+    const i = list.findIndex(x => x.id === inv.id);
+    if (i >= 0) list[i] = inv; else list.unshift(inv);
+    this.saveInv(list);
+  },
+  del(id) { this.saveInv(this.getInv().filter(i => i.id !== id)); }
+};
+
+// ==================== STATE ====================
+let rows = [newRow(1)];
+let editId = null;
+let pendingDel = null;
+
+function newRow(id) { return { id, shirtType: '', color: '', sizes: '', qty: 0, price: 0 }; }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+// ==================== UTILS ====================
+function today() { return new Date().toISOString().split('T')[0]; }
+function fmtDate(s) { if (!s) return ''; const [y,m,d] = s.split('-'); return `${d}/${m}/${y}`; }
+function fmtNum(n) { return Number(n||0).toLocaleString('vi-VN'); }
+function fmtMoney(n) { return fmtNum(n) + 'đ'; }
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function numToVN(n) {
+  n = Math.round(n || 0);
+  if (n === 0) return 'Không đồng';
+  const o = ['','một','hai','ba','bốn','năm','sáu','bảy','tám','chín'];
+  function grp(x, showZ) {
+    let r = '';
+    const h=Math.floor(x/100), t=Math.floor(x%100/10), u=x%10;
+    if (h) r += o[h]+' trăm';
+    else if (showZ) r += 'không trăm';
+    if (!t && !u) return r.trim();
+    if (!t) { r += ' lẻ '+o[u]; return r.trim(); }
+    r += t===1 ? ' mười' : ' '+o[t]+' mươi';
+    if (u===1 && t>1) r += ' mốt';
+    else if (u===5 && t>=1) r += ' lăm';
+    else if (u) r += ' '+o[u];
+    return r.trim();
+  }
+  const units=['','nghìn','triệu','tỷ'];
+  let parts=[], tmp=n, i=0;
+  while(tmp>0){ const g=tmp%1000; if(g) parts.unshift(grp(g,i>0&&tmp>1000)+(units[i]?' '+units[i]:'')); tmp=Math.floor(tmp/1000); i++; }
+  const s = parts.join(' ').replace(/\s+/g,' ').trim();
+  return s.charAt(0).toUpperCase()+s.slice(1)+' đồng';
+}
+
+// ==================== TOAST ====================
+let toastTimer;
+function toast(msg, err=false) {
+  const el = document.getElementById('toast');
+  const ic = document.getElementById('toast-icon');
+  document.getElementById('toast-msg').textContent = msg;
+  ic.innerHTML = err
+    ? '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'
+    : '<polyline points="20 6 9 17 4 12"/>';
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ==================== NAV ====================
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('nav-'+name).classList.add('active');
+  if (name==='history') renderHistory();
+  if (name==='stats') renderStats();
+}
+
+// ==================== ITEMS ====================
+function addItem() {
+  rows.push(newRow(rows.length+1));
+  renderRows();
+  updateSummary();
+}
+function removeItem(id) {
+  if (rows.length===1) { toast('Cần ít nhất 1 mặt hàng', true); return; }
+  rows = rows.filter(r=>r.id!==id);
+  rows.forEach((r,i)=>r.id=i+1);
+  renderRows();
+  updateSummary();
+}
+function setField(id, field, val) {
+  const row = rows.find(r=>r.id===id);
+  if (!row) return;
+  if (field==='qty'||field==='price') row[field]=parseFloat(val)||0;
+  else row[field]=val;
+  const cell = document.getElementById('tt'+id);
+  if (cell) cell.textContent = fmtMoney((row.qty||0)*(row.price||0));
+  updateSummary();
+}
+
+function renderRows() {
+  document.getElementById('items-body').innerHTML = rows.map(r => `
+    <tr style="border-bottom:1.5px solid #f8fafc;" id="row${r.id}">
+      <td style="padding:8px 8px 8px 2px;color:#94a3b8;font-size:13px;text-align:center;">${r.id}</td>
+      <td style="padding:6px 6px 6px 0;">
+        <input class="inp" type="text" value="${esc(r.shirtType)}" placeholder="Boxy, Basic..."
+          style="font-size:13px;padding:7px 10px;" oninput="setField(${r.id},'shirtType',this.value)">
+      </td>
+      <td style="padding:6px 6px 6px 0;">
+        <input class="inp" type="text" value="${esc(r.color)}" placeholder="Trắng, Đen..."
+          style="font-size:13px;padding:7px 10px;" oninput="setField(${r.id},'color',this.value)">
+      </td>
+      <td style="padding:6px 6px 6px 0;">
+        <input class="inp" type="text" value="${esc(r.sizes)}" placeholder="1S 2M 1L"
+          style="font-size:13px;padding:7px 10px;" oninput="setField(${r.id},'sizes',this.value)">
+      </td>
+      <td style="padding:6px 4px 6px 0;">
+        <input class="inp" type="number" value="${r.qty||''}" placeholder="0" min="0"
+          style="font-size:13px;padding:7px 8px;text-align:right;" oninput="setField(${r.id},'qty',this.value)">
+      </td>
+      <td style="padding:6px 4px 6px 0;">
+        <input class="inp" type="number" value="${r.price||''}" placeholder="0" min="0"
+          style="font-size:13px;padding:7px 8px;text-align:right;" oninput="setField(${r.id},'price',this.value)">
+      </td>
+      <td style="padding:6px 4px 6px 0;text-align:right;font-size:13px;font-weight:600;color:#334155;white-space:nowrap;" id="tt${r.id}">
+        ${fmtMoney((r.qty||0)*(r.price||0))}
+      </td>
+      <td style="padding:6px 0;text-align:center;">
+        <button class="btn-ghost" onclick="removeItem(${r.id})" title="Xoá dòng" style="padding:5px;color:#cbd5e1;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#cbd5e1'">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function updateSummary() {
+  const totalQty = rows.reduce((s,r)=>s+(parseInt(r.qty)||0), 0);
+  const totalPrice = rows.reduce((s,r)=>s+((parseInt(r.qty)||0)*(parseFloat(r.price)||0)), 0);
+  const has = totalQty>0||totalPrice>0;
+  document.getElementById('summary-empty').style.display = has ? 'none' : 'block';
+  document.getElementById('summary-data').style.display = has ? 'block' : 'none';
+  document.getElementById('sum-qty').textContent = fmtNum(totalQty);
+  document.getElementById('sum-price').textContent = fmtMoney(totalPrice);
+}
+
+// ==================== AUTOCOMPLETE ====================
+function handleSearch(val) {
+  if (!val.trim()) { closeAC(); return; }
+  const q = val.toLowerCase();
+  const matches = DB.getCx().filter(c =>
+    c.name.toLowerCase().includes(q) || (c.phone||'').includes(q)
+  ).slice(0, 7);
+  if (!matches.length) { closeAC(); return; }
+  const dd = document.getElementById('ac-drop');
+  dd.innerHTML = matches.map(c => `
+    <div class="ac-item" onclick="pickCx(${JSON.stringify(esc(c.name))},${JSON.stringify(esc(c.phone||''))},${JSON.stringify(esc(c.address||''))})">
+      <div style="font-size:13.5px;font-weight:600;color:#1e293b;">${esc(c.name)}</div>
+      <div style="font-size:12px;color:#64748b;margin-top:1px;">${esc(c.phone||'')}${c.address?' · '+esc(c.address):''}</div>
+    </div>
+  `).join('');
+  dd.style.display = 'block';
+}
+function pickCx(name, phone, address) {
+  document.getElementById('inp-search').value = name;
+  document.getElementById('inp-phone').value = phone;
+  document.getElementById('inp-address').value = address;
+  closeAC();
+}
+function closeAC() { document.getElementById('ac-drop').style.display = 'none'; }
+document.addEventListener('click', e => {
+  if (!e.target.closest('.ac-wrap')) closeAC();
+});
+
+// ==================== SAVE ====================
+function saveInvoice() {
+  const name = document.getElementById('inp-search').value.trim();
+  const phone = document.getElementById('inp-phone').value.trim();
+  const address = document.getElementById('inp-address').value.trim();
+  const date = document.getElementById('inp-date').value || today();
+  if (!name) { toast('Vui lòng nhập tên khách hàng', true); return; }
+  if (!phone) { toast('Vui lòng nhập số điện thoại', true); return; }
+  if (!rows.some(r=>r.shirtType)) { toast('Vui lòng nhập ít nhất 1 mặt hàng', true); return; }
+  DB.upsertCx(name, phone, address);
+  const totalQty = rows.reduce((s,r)=>s+(parseInt(r.qty)||0), 0);
+  const totalPrice = rows.reduce((s,r)=>s+((parseInt(r.qty)||0)*(parseFloat(r.price)||0)), 0);
+  const inv = {
+    id: editId || uid(),
+    customerName: name, customerPhone: phone, customerAddress: address, date,
+    items: rows.map(r=>({...r})),
+    totalQuantity: totalQty, totalPrice
+  };
+  DB.saveOne(inv);
+  const wasEdit = !!editId;
+  editId = inv.id;
+  toast(wasEdit ? 'Đã cập nhật hoá đơn!' : 'Đã lưu hoá đơn thành công!');
+}
+
+function resetForm() {
+  editId = null;
+  document.getElementById('inp-search').value = '';
+  document.getElementById('inp-phone').value = '';
+  document.getElementById('inp-address').value = '';
+  document.getElementById('inp-date').value = today();
+  rows = [newRow(1)];
+  renderRows(); updateSummary();
+}
+
+// ==================== PRINT ====================
+function openPrint() {
+  const name = document.getElementById('inp-search').value.trim();
+  const phone = document.getElementById('inp-phone').value.trim();
+  const address = document.getElementById('inp-address').value.trim();
+  const date = document.getElementById('inp-date').value || today();
+
+  document.getElementById('pr-name').textContent = name;
+  document.getElementById('pr-phone').textContent = phone;
+  document.getElementById('pr-address').textContent = address;
+
+  const [y,m,d2] = date.split('-');
+  document.getElementById('pr-date-str').textContent = `Ngày ${d2} tháng ${m} năm ${y}`;
+
+  document.getElementById('pr-items').innerHTML = rows.map((r,i) => {
+    const label = [r.shirtType, r.color, r.sizes].filter(Boolean).join(' - ');
+    const tt = (parseInt(r.qty)||0)*(parseFloat(r.price)||0);
+    return `<tr>
+      <td style="border:1.5px solid #000;padding:7px 6px;text-align:center;font-size:13px;">${i+1}</td>
+      <td style="border:1.5px solid #000;padding:7px 10px;font-size:13px;">${esc(label)}</td>
+      <td style="border:1.5px solid #000;padding:7px 6px;text-align:center;font-size:13px;">${r.qty||0}</td>
+      <td style="border:1.5px solid #000;padding:7px 8px;text-align:right;font-size:13px;">${fmtNum(r.price||0)}</td>
+      <td style="border:1.5px solid #000;padding:7px 8px;text-align:right;font-size:13px;">${fmtNum(tt)}</td>
+    </tr>`;
+  }).join('');
+
+  const totalQty = rows.reduce((s,r)=>s+(parseInt(r.qty)||0), 0);
+  const totalPrice = rows.reduce((s,r)=>s+((parseInt(r.qty)||0)*(parseFloat(r.price)||0)), 0);
+  document.getElementById('pr-total-qty').textContent = totalQty;
+  document.getElementById('pr-total-price').textContent = fmtNum(totalPrice);
+  document.getElementById('pr-words').textContent = numToVN(totalPrice);
+
+  const ov = document.getElementById('print-overlay');
+  ov.style.display = 'flex';
+}
+function closePrint() {
+  document.getElementById('print-overlay').style.display = 'none';
+}
+function doPrint() {
+  const portal = document.getElementById('print-portal');
+  portal.innerHTML = document.getElementById('print-area').outerHTML;
+  portal.style.display = 'block';
+  window.print();
+  setTimeout(() => { portal.style.display = 'none'; portal.innerHTML = ''; }, 500);
+}
+async function saveJpg() {
+  try {
+    toast('Đang xuất ảnh...');
+    const canvas = await html2canvas(document.getElementById('print-area'), { scale:2, useCORS:true, backgroundColor:'#fff' });
+    const a = document.createElement('a');
+    const name = document.getElementById('pr-name').textContent || 'hoadon';
+    const date = document.getElementById('inp-date').value || today();
+    a.download = `HoaDon_${name}_${date}.jpg`;
+    a.href = canvas.toDataURL('image/jpeg', 0.95);
+    a.click();
+    toast('Đã lưu ảnh JPG!');
+  } catch(e) { toast('Lỗi xuất ảnh', true); }
+}
+function exportExcel() {
+  const name = document.getElementById('inp-search').value.trim() || 'KhachHang';
+  const phone = document.getElementById('inp-phone').value.trim();
+  const date = document.getElementById('inp-date').value || today();
+  const totalQty = rows.reduce((s,r)=>s+(parseInt(r.qty)||0), 0);
+  const totalPrice = rows.reduce((s,r)=>s+((parseInt(r.qty)||0)*(parseFloat(r.price)||0)), 0);
+
+  const data = [
+    ['TỔNG KHO PHÔI ÁO PHI SƠN - HÓA ĐƠN BÁN HÀNG'],
+    [],
+    ['Khách hàng:', name, '', 'Ngày:', fmtDate(date)],
+    ['SĐT:', phone],
+    [],
+    ['TT','Loại áo','Màu','Size','Số lượng','Đơn giá','Thành tiền'],
+    ...rows.map((r,i)=>[i+1, r.shirtType, r.color, r.sizes, r.qty||0, r.price||0, (parseInt(r.qty)||0)*(parseFloat(r.price)||0)]),
+    [],
+    ['','','','TỔNG CỘNG', totalQty, '', totalPrice]
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{wch:5},{wch:16},{wch:12},{wch:14},{wch:10},{wch:12},{wch:14}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'HoaDon');
+  XLSX.writeFile(wb, `HoaDon_${name}_${date}.xlsx`);
+  toast('Đã xuất file Excel!');
+}
+
+// ==================== HISTORY ====================
+function renderHistory() {
+  const list = DB.getInv();
+  const body = document.getElementById('hist-body');
+  const empty = document.getElementById('hist-empty');
+  if (!list.length) { body.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  body.innerHTML = list.map(inv => `
+    <tr style="border-bottom:1.5px solid #f8fafc;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+      <td style="padding:14px 16px;font-size:13.5px;color:#64748b;">${fmtDate(inv.date)}</td>
+      <td style="padding:14px 16px;font-size:13.5px;font-weight:600;color:#1e293b;">${esc(inv.customerName)}</td>
+      <td style="padding:14px 16px;font-size:13.5px;color:#64748b;">${esc(inv.customerPhone||'')}</td>
+      <td style="padding:14px 16px;font-size:13.5px;font-weight:600;color:#334155;text-align:right;">${fmtNum(inv.totalQuantity||0)}</td>
+      <td style="padding:14px 16px;font-size:13.5px;font-weight:700;color:#2563eb;text-align:right;">${fmtMoney(inv.totalPrice||0)}</td>
+      <td style="padding:14px 16px;text-align:center;">
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;">
+          <button class="btn-ghost" onclick="loadInvoice('${inv.id}')" title="Chỉnh sửa" style="padding:6px;">
+            <svg width="15" height="15" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn-ghost" onclick="askDel('${inv.id}')" title="Xoá" style="padding:6px;" onmouseover="this.querySelector('svg').style.stroke='#ef4444'" onmouseout="this.querySelector('svg').style.stroke='#64748b'">
+            <svg width="15" height="15" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function loadInvoice(id) {
+  const inv = DB.getInv().find(i=>i.id===id);
+  if (!inv) return;
+  editId = inv.id;
+  document.getElementById('inp-search').value = inv.customerName||'';
+  document.getElementById('inp-phone').value = inv.customerPhone||'';
+  document.getElementById('inp-address').value = inv.customerAddress||'';
+  document.getElementById('inp-date').value = inv.date||today();
+  rows = (inv.items||[]).map((r,i)=>({...r,id:i+1}));
+  if (!rows.length) rows=[newRow(1)];
+  renderRows(); updateSummary();
+  showPage('create');
+  toast('Đã tải hoá đơn để chỉnh sửa');
+}
+
+function askDel(id) {
+  pendingDel = id;
+  const bg = document.getElementById('confirm-bg');
+  bg.style.display = 'flex';
+}
+function closeConfirm() {
+  pendingDel = null;
+  document.getElementById('confirm-bg').style.display = 'none';
+}
+function doDelete() {
+  if (pendingDel) { DB.del(pendingDel); renderHistory(); toast('Đã xoá hoá đơn'); }
+  closeConfirm();
+}
+
+// ==================== STATS ====================
+function renderStats() {
+  const from = document.getElementById('stat-from').value;
+  const to = document.getElementById('stat-to').value;
+  let list = DB.getInv();
+  if (from) list = list.filter(i=>i.date>=from);
+  if (to) list = list.filter(i=>i.date<=to);
+
+  const map = {};
+  list.forEach(inv => {
+    const k = inv.customerPhone||inv.customerName;
+    if (!map[k]) map[k]={name:inv.customerName,phone:inv.customerPhone,qty:0,total:0};
+    map[k].qty += inv.totalQuantity||0;
+    map[k].total += inv.totalPrice||0;
+  });
+  const data = Object.values(map).sort((a,b)=>b.total-a.total);
+
+  document.getElementById('stat-cust').textContent = data.length;
+  document.getElementById('stat-qty').textContent = fmtNum(data.reduce((s,r)=>s+r.qty,0));
+  document.getElementById('stat-rev').textContent = fmtMoney(data.reduce((s,r)=>s+r.total,0));
+
+  const body = document.getElementById('stat-body');
+  const empty = document.getElementById('stat-empty');
+  if (!data.length) { body.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  body.innerHTML = data.map(r => `
+    <tr style="border-bottom:1.5px solid #f8fafc;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+      <td style="padding:14px 16px;font-size:13.5px;font-weight:600;color:#1e293b;">${esc(r.name)}</td>
+      <td style="padding:14px 16px;font-size:13.5px;color:#64748b;">${esc(r.phone||'')}</td>
+      <td style="padding:14px 16px;font-size:13.5px;font-weight:600;color:#334155;text-align:right;">${fmtNum(r.qty)}</td>
+      <td style="padding:14px 16px;font-size:13.5px;font-weight:700;color:#2563eb;text-align:right;">${fmtMoney(r.total)}</td>
+    </tr>
+  `).join('');
+}
+
+// ==================== INIT ====================
+document.getElementById('inp-date').value = today();
+renderRows();
+updateSummary();
+</script>
+</body>
+</html>
